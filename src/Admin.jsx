@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Plus, GripVertical, Pencil, Play } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Trash2, Plus, GripVertical, Pencil, Play, LogOut } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import VideoPlayer from './components/VideoPlayer';
 import logo from './assets/CodenestLIVE_TV_bg_removed.png';
+import { db, auth } from './firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { signOut } from 'firebase/auth';
 
 export default function Admin() {
   const [channels, setChannels] = useState([]);
@@ -10,24 +13,34 @@ export default function Admin() {
   const [lockedCategories, setLockedCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [testChannel, setTestChannel] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchData();
   }, []);
 
-  const fetchData = () => {
-    Promise.all([
-      fetch('/api/channels').then(r => r.json()),
-      fetch('/api/settings').then(r => r.json())
-    ]).then(([channelsData, settingsData]) => {
-      setChannels(channelsData.channels || []);
-      setCategories(channelsData.categories || []);
-      setLockedCategories(settingsData.lockedCategories || []);
+  const fetchData = async () => {
+    try {
+      const [dataSnap, settingsSnap] = await Promise.all([
+        getDoc(doc(db, "config", "data")),
+        getDoc(doc(db, "config", "settings"))
+      ]);
+      
+      const data = dataSnap.exists() ? dataSnap.data() : { channels: [], categories: [] };
+      const settings = settingsSnap.exists() ? settingsSnap.data() : { lockedCategories: [] };
+      
+      setChannels(data.channels || []);
+      setCategories(data.categories || []);
+      setLockedCategories(settings.lockedCategories || []);
       setLoading(false);
-    });
+    } catch (err) {
+      console.error(err);
+      alert("Failed to fetch data from Firestore. Check your database rules.");
+      setLoading(false);
+    }
   };
 
-  const toggleCategoryLock = (category) => {
+  const toggleCategoryLock = async (category) => {
     if (category === 'All') return;
     const newLocked = lockedCategories.includes(category) 
       ? lockedCategories.filter(c => c !== category)
@@ -35,17 +48,31 @@ export default function Admin() {
       
     setLockedCategories(newLocked);
     
-    fetch('/api/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lockedCategories: newLocked })
-    });
+    try {
+      await setDoc(doc(db, "config", "settings"), { lockedCategories: newLocked });
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update settings");
+    }
+  };
+
+  const syncDataToFirestore = async (newChannels, newCategories) => {
+    try {
+      await setDoc(doc(db, "config", "data"), { 
+        channels: newChannels, 
+        categories: newCategories || categories 
+      });
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save changes to Firestore.");
+    }
   };
 
   const deleteChannel = (id) => {
     if (!confirm('Are you sure you want to delete this channel?')) return;
-    fetch(`/api/channels/${id}`, { method: 'DELETE' })
-      .then(() => fetchData());
+    const newChannels = channels.filter(c => c.id !== id);
+    syncDataToFirestore(newChannels);
   };
 
   const addChannel = () => {
@@ -54,11 +81,15 @@ export default function Admin() {
     const url = prompt('Stream URL:');
     if (!name || !url) return;
     
-    fetch('/api/channels', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, category, url, logo: '' })
-    }).then(() => fetchData());
+    const newChannel = { name, category, url, logo: '', id: Math.random().toString(36).substr(2, 10) };
+    const newChannels = [...channels, newChannel];
+    
+    const newCategories = [...categories];
+    if (!newCategories.includes(category)) {
+      newCategories.push(category);
+    }
+    
+    syncDataToFirestore(newChannels, newCategories);
   };
 
   const editChannel = (channel) => {
@@ -69,11 +100,16 @@ export default function Admin() {
     const url = prompt('Stream URL:', channel.url);
     if (url === null) return;
     
-    fetch(`/api/channels/${channel.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, category, url })
-    }).then(() => fetchData());
+    const newChannels = channels.map(c => 
+      c.id === channel.id ? { ...c, name, category, url } : c
+    );
+    
+    const newCategories = [...categories];
+    if (!newCategories.includes(category)) {
+      newCategories.push(category);
+    }
+    
+    syncDataToFirestore(newChannels, newCategories);
   };
 
   const moveChannelWithinCategory = (channelId, direction, catChannels) => {
@@ -96,12 +132,17 @@ export default function Admin() {
     setChannels(newChannels);
   };
 
-  const saveOrder = () => {
-    fetch('/api/channels/reorder', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order: channels.map(c => c.id) })
-    }).then(() => alert('Order Saved!'));
+  const saveOrder = async () => {
+    try {
+      await setDoc(doc(db, "config", "data"), { 
+        channels: channels, 
+        categories: categories 
+      });
+      alert('Order Saved!');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to save order');
+    }
   };
 
   if (loading) return <div style={{ color: 'white', padding: 24 }}>Loading Admin...</div>;
@@ -117,6 +158,12 @@ export default function Admin() {
           </button>
           <button onClick={saveOrder} style={{ background: '#10b981', color: 'white', border: 'none', padding: '8px 16px', borderRadius: 8, cursor: 'pointer' }}>
             Save Order
+          </button>
+          <button 
+            onClick={() => signOut(auth).then(() => navigate('/login'))} 
+            style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '8px 16px', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            <LogOut size={16} /> Sign Out
           </button>
         </div>
       </div>

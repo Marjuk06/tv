@@ -3,6 +3,8 @@ import Sidebar from './components/Sidebar';
 import VideoPlayer from './components/VideoPlayer';
 import ChannelList from './components/ChannelList';
 import MatchBanner from './components/MatchBanner';
+import { db } from './firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 export default function Viewer() {
   const [activeCategory, setActiveCategory] = useState('All');
@@ -14,16 +16,19 @@ export default function Viewer() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/channels').then(r => r.json()),
-      fetch('/api/settings').then(r => r.json())
+      getDoc(doc(db, "config", "data")),
+      getDoc(doc(db, "config", "settings"))
     ])
-      .then(([channelsData, settingsData]) => {
-        const locked = settingsData.lockedCategories || [];
+      .then(([dataSnap, settingsSnap]) => {
+        const data = dataSnap.exists() ? dataSnap.data() : { channels: [], categories: [] };
+        const settings = settingsSnap.exists() ? settingsSnap.data() : { lockedCategories: [] };
+        
+        const locked = settings.lockedCategories || [];
         setLockedCategories(locked);
 
         // Filter out locked categories
-        const allowedCategories = channelsData.categories.filter(c => !locked.includes(c));
-        const allowedChannels = channelsData.channels.filter(c => !locked.includes(c.category));
+        const allowedCategories = (data.categories || []).filter(c => !locked.includes(c));
+        const allowedChannels = (data.channels || []).filter(c => !locked.includes(c.category));
 
         setChannels(allowedChannels);
         setCategories(allowedCategories);
