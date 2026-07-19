@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import VideoPlayer from './components/VideoPlayer';
 import ChannelList from './components/ChannelList';
 import MatchBanner from './components/MatchBanner';
+import LiveEvents from './components/LiveEvents';
 import { db } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
@@ -11,6 +12,7 @@ export default function Viewer() {
   const [channels, setChannels] = useState([]);
   const [categories, setCategories] = useState([]);
   const [lockedCategories, setLockedCategories] = useState([]);
+  const [liveEvents, setLiveEvents] = useState([]);
   const [currentChannel, setCurrentChannel] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -32,6 +34,7 @@ export default function Viewer() {
 
         setChannels(allowedChannels);
         setCategories(allowedCategories);
+        setLiveEvents(data.liveEvents || []);
         
         if (allowedChannels.length > 0) {
           setCurrentChannel(allowedChannels[0]);
@@ -55,18 +58,26 @@ export default function Viewer() {
       />
       
       <main className="main-content">
-        <VideoPlayer 
-          currentChannel={currentChannel} 
-        />
-        <div className="hide-on-desktop" style={{ padding: '16px 16px 0' }}>
-          <MatchBanner />
-        </div>
-        <ChannelList 
-          channels={channels} 
-          currentChannel={currentChannel} 
-          onSelectChannel={setCurrentChannel}
-          activeCategory={activeCategory}
-        />
+        {activeCategory === 'Live Events' ? (
+          <div style={{ padding: 24 }}>
+            <LiveEvents events={liveEvents} />
+          </div>
+        ) : (
+          <>
+            <VideoPlayer 
+              currentChannel={currentChannel} 
+            />
+            <div className="hide-on-desktop" style={{ padding: '16px 16px 0' }}>
+              <MatchBanner />
+            </div>
+            <ChannelList 
+              channels={channels} 
+              currentChannel={currentChannel} 
+              onSelectChannel={setCurrentChannel}
+              activeCategory={activeCategory}
+            />
+          </>
+        )}
       </main>
     </div>
   );

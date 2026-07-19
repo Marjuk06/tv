@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tv, Home, Globe, Activity, Film, Music, BookOpen, Trophy, Newspaper, MonitorPlay } from 'lucide-react';
+import { Tv, Home, Globe, Activity, Film, Music, BookOpen, Trophy, Newspaper, MonitorPlay, Radio } from 'lucide-react';
 import MatchBanner from './MatchBanner';
 import logo from '../assets/CodenestLIVE_TV_bg_removed.png';
 
@@ -17,19 +17,30 @@ const iconMap = {
 
 export default function Sidebar({ categories, activeCategory, onSelectCategory }) {
   const renderNavItems = () => (
-    categories.map(category => {
-      const Icon = iconMap[category] || Tv;
-      return (
-        <div 
-          key={category}
-          className={`nav-item ${activeCategory === category ? 'active' : ''}`}
-          onClick={() => onSelectCategory(category)}
-        >
-          <Icon size={20} />
-          <span>{category === 'Football World Cup 2026' ? 'FIFA' : category}</span>
-        </div>
-      );
-    })
+    <>
+      <div 
+        className={`nav-item ${activeCategory === 'Live Events' ? 'active' : ''}`}
+        onClick={() => onSelectCategory('Live Events')}
+        style={activeCategory === 'Live Events' ? { background: 'rgba(239, 68, 68, 0.2)', color: '#fca5a5', borderLeftColor: '#ef4444' } : {}}
+      >
+        <Radio size={20} color={activeCategory === 'Live Events' ? '#ef4444' : 'currentColor'} />
+        <span style={{ fontWeight: activeCategory === 'Live Events' ? 'bold' : 'normal', color: activeCategory === 'Live Events' ? '#fca5a5' : 'inherit' }}>Live Events</span>
+      </div>
+      
+      {categories.map(category => {
+        const Icon = iconMap[category] || Tv;
+        return (
+          <div 
+            key={category}
+            className={`nav-item ${activeCategory === category ? 'active' : ''}`}
+            onClick={() => onSelectCategory(category)}
+          >
+            <Icon size={20} />
+            <span>{category === 'Football World Cup 2026' ? 'FIFA' : category}</span>
+          </div>
+        );
+      })}
+    </>
   );
 
   return (
